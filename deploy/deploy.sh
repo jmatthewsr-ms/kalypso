@@ -81,6 +81,7 @@ rg_name=$PREFIX-rg
 
 update_files_in_branch() {
  git checkout $1
+ git pull
  for file in `find . -type f \( -name "*.yaml" \)`; do cat "$file" | sed "s/microsoft/$ORG/g" | sed "s/kalypso-/$PREFIX-/g" > "$file"1 && mv "$file"1 "$file"; done
  git add .
  git commit -m "Update "$1" with new org and prefix"
@@ -92,7 +93,7 @@ create_control_plane_repo() {
   controlplane_repo_template=microsoft/kalypso-control-plane
   echo "Creating Controll Plane Repository "$controlplane_repo_name
   gh repo create $controlplane_repo_name --public --include-all-branches  -p $controlplane_repo_template
-  sleep 3
+  sleep 10
 
   jq -n '{"deployment_branch_policy": {"protected_branches": false, "custom_branch_policies": true}}'|gh api -H "Accept: application/vnd.github+json" -X PUT /repos/$controlplane_repo_name/environments/dev --input -
   gh secret set GITOPS_REPO -b $gitops_repo_name -R $controlplane_repo_name
@@ -100,6 +101,11 @@ create_control_plane_repo() {
   echo "stage" | gh secret set NEXT_ENVIRONMENT -e dev -R $controlplane_repo_name
 
   subid=$(az account list --query "[?isDefault].id" -o tsv)
+  existing_app=$(az ad sp list --display-name kalypso-$PREFIX | jq --arg name "kalypso-$PREFIX" \ '.[] | select(.appDisplayName==$name).appId')
+
+  if [[ -n "$existing_app" ]]; then
+    echo "WARNING - Service Principal kalypso-$PREFIX already exists. Choose a different prefix variable if you are not the owner of the existing principal."
+  fi
   az ad sp create-for-rbac --name kalypso-$PREFIX --role contributor --scopes /subscriptions/$subid --sdk-auth | gh secret set AZURE_CREDENTIALS -R $controlplane_repo_name
   
   git clone $gh_prefix/$controlplane_repo_name control-plane
@@ -119,7 +125,8 @@ create_gitops_repo() {
   gitops_repo_template=microsoft/kalypso-gitops
   echo "Creating GitOps Repository "$gitops_repo_name
   gh repo create $gitops_repo_name --public --include-all-branches  -p $gitops_repo_template
-  sleep 3
+  sleep 10
+  gh repo view $gitops_repo_name
   git clone $gh_prefix/$gitops_repo_name gitops
   
   pushd gitops
@@ -143,7 +150,7 @@ create_app_gitops_repo() {
   rm -rf gitops
   echo "Creating GitOps Repository "$appgitops_repo_name
   gh repo create $appgitops_repo_name --public
-  sleep 3
+  sleep 10
   git clone $gh_prefix/$appgitops_repo_name gitops
   
   pushd gitops
@@ -201,7 +208,7 @@ create_svcsrc_repo() {
   svcsrc_repo_template=microsoft/kalypso-svc-src
   echo "Creating Service Source Repository "$svcsrc_repo_template
   gh repo create $svcsrc_repo_name --public --include-all-branches  -p $svcsrc_repo_template
-  sleep 3
+  sleep 10
   gh secret set MANIFESTS_TOKEN -b $TOKEN -R $svcsrc_repo_name
   gh secret set MANIFESTS_REPO -b $gh_prefix/$svcgitops_repo_name -R $svcsrc_repo_name
   
