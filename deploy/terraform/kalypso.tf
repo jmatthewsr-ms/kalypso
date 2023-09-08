@@ -56,6 +56,24 @@ resource "github_repository" control_plane_repo {
   visibility = "public"
 }
 
+resource "github_repository_environment" "dev" {
+  environment = "dev"
+  repository  = github_repository.control_plane_repo.name
+  deployment_branch_policy {
+    protected_branches     = false
+    custom_branch_policies = true
+  }
+}
+
+resource "github_repository_environment" "stage" {
+  environment = "stage"
+  repository  = github_repository.control_plane_repo.name
+  deployment_branch_policy {
+    protected_branches     = false
+    custom_branch_policies = true
+  }
+}
+
 resource "github_actions_secret" "gitops_repo" {
   repository      = local.controlplane_repo_name
   secret_name     = "GITOPS_REPO"
@@ -69,7 +87,7 @@ resource "github_actions_secret" "gitops_repo_token" {
 }
 
 resource "github_actions_environment_secret" "next_environment" {
-  environment     = "dev"
+  environment     = github_repository_environment.dev.environment
   secret_name     = "NEXT_ENVIRONMENT"
   plaintext_value = "stage"
   repository      = local.controlplane_repo_name
